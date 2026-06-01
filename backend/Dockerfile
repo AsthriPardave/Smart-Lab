@@ -8,12 +8,6 @@ ENV PYTHONUNBUFFERED=1
 # Establecer directorio de trabajo
 WORKDIR /app
 
-# Instalar dependencias del sistema
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copiar requirements e instalar dependencias de Python
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt

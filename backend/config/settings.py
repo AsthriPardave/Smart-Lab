@@ -16,16 +16,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
-    'corsheaders',
-    'django_filters',
     'api',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -83,34 +79,39 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
-    'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication'],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
-    ],
-}
-
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000',
-    cast=lambda v: [s.strip() for s in v.split(',')]
-)
-CORS_ALLOW_CREDENTIALS = True
-
+# Configuración de Jazzmin (Panel de Administración)
 JAZZMIN_SETTINGS = {
     "site_title": "SmartLab Admin",
-    "site_header": "SmartLab",
+    "site_header": "SmartLab - Control de Acceso",
     "site_brand": "SmartLab",
-    "welcome_sign": "Bienvenido al Panel de Administración",
-    "copyright": "SmartLab",
-    "search_model": ["auth.User", "api.Docente"],
+    "site_logo": None,
+    "welcome_sign": "Bienvenido al Panel de Administración de SmartLab",
+    "copyright": "SmartLab © 2026",
+    "search_model": ["auth.User", "api.Docente", "api.Laboratorio"],
     "topmenu_links": [
         {"name": "Inicio", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": "API", "url": "/api/", "new_window": True},
+        {"name": "Ver Registros de Hoy", "url": "admin:api_registroacceso_changelist"},
     ],
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "icons": {
+        "auth": "fas fa-users-cog",
+        "auth.user": "fas fa-user",
+        "api.Docente": "fas fa-chalkboard-teacher",
+        "api.Laboratorio": "fas fa-flask",
+        "api.Dispositivo": "fas fa-fingerprint",
+        "api.Horario": "fas fa-clock",
+        "api.RegistroAcceso": "fas fa-list-alt",
+    },
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "default_icon_children": "fas fa-circle",
+    "related_modal_active": True,
+    "custom_css": None,
+    "custom_js": None,
+    "show_ui_builder": False,
+    "changeform_format": "horizontal_tabs",
+    "changeform_format_overrides": {
+        "auth.user": "collapsible",
+        "auth.group": "vertical_tabs"
+    },
 }

@@ -1,8 +1,5 @@
 # Django y utilidades
 Django==5.0.4
-djangorestframework==3.15.1
-django-cors-headers==4.3.1
-django-filter==24.2
 django-jazzmin==3.0.0
 
 # Base de datos
@@ -11,9 +8,6 @@ psycopg[binary]==3.3.4
 # Variables de entorno
 python-decouple==3.8
 python-dotenv==1.0.1
-
-# Autenticación y seguridad
-djangorestframework-simplejwt==5.3.1
 
 # Utilidades
 pytz==2024.1

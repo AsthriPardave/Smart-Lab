@@ -1,176 +1,195 @@
-from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, action
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from datetime import datetime
+import json
 
 from .models import Docente, Dispositivo, Laboratorio, Horario, RegistroAcceso
-from .serializers import (
-    DocenteSerializer, DispositivoSerializer, LaboratorioSerializer,
-    HorarioSerializer, RegistroAccesoSerializer, RegistroAccesoCreateSerializer
-)
 
 
-@api_view(['GET'])
+def index(request):
+    """
+    Vista principal de la API
+    """
+    return JsonResponse({
+        'status': 'ok',
+        'message': 'SmartLab API - Sistema de Control de Acceso Biométrico',
+        'version': '2.0',
+        'endpoints': {
+            'validar_acceso': '/api/validar-acceso/ [POST]',
+            'health': '/api/health/ [GET]'
+        }
+    })
+
+
 def health_check(request):
     """
     Endpoint para verificar el estado de la API
     """
-    return Response({
+    return JsonResponse({
         'status': 'ok',
-        'message': 'SmartLab API is running'
-    }, status=status.HTTP_200_OK)
+        'message': 'SmartLab API is running',
+        'timestamp': timezone.now().isoformat()
+    })
 
 
-class DocenteViewSet(viewsets.ModelViewSet):
+@csrf_exempt
+@require_http_methods(["POST"])
+def validar_acceso(request):
     """
-    ViewSet para gestionar docentes
-    """
-    queryset = Docente.objects.all()
-    serializer_class = DocenteSerializer
-    permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['activo', 'codigo_docente']
-    search_fields = ['nombres', 'correo', 'codigo_docente']
-    ordering_fields = ['nombres', 'codigo_docente', 'created_at']
-    ordering = ['nombres']
+    Endpoint principal para validar acceso biométrico
     
-    @action(detail=False, methods=['get'])
-    def activos(self, request):
-        """
-        Endpoint para listar solo docentes activos
-        """
-        docentes = self.queryset.filter(activo=True)
-        serializer = self.get_serializer(docentes, many=True)
-        return Response(serializer.data)
+    Recibe:
+    {
+        "fingerprint_id": 123,
+        "dispositivo_codigo": "DISP001"
+    }
     
-    @action(detail=True, methods=['get'])
-    def horarios(self, request, pk=None):
-        """
-        Obtener horarios de un docente específico
-        """
-        docente = self.get_object()
-        horarios = docente.horarios.all()
-        serializer = HorarioSerializer(horarios, many=True)
-        return Response(serializer.data)
-
-
-class DispositivoViewSet(viewsets.ModelViewSet):
+    Retorna:
+    {
+        "acceso_permitido": true/false,
+        "motivo": "mensaje",
+        "docente": {...},
+        "laboratorio": {...}
+    }
     """
-    ViewSet para gestionar dispositivos
-    """
-    queryset = Dispositivo.objects.all()
-    serializer_class = DispositivoSerializer
-    permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'codigo']
-    search_fields = ['codigo', 'ip']
-    ordering_fields = ['codigo', 'created_at']
-    ordering = ['codigo']
-
-
-class LaboratorioViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para gestionar laboratorios
-    """
-    queryset = Laboratorio.objects.select_related('dispositivo').all()
-    serializer_class = LaboratorioSerializer
-    permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['estado', 'nombre']
-    search_fields = ['nombre', 'ubicacion']
-    ordering_fields = ['nombre', 'created_at']
-    ordering = ['nombre']
-    
-    @action(detail=False, methods=['get'])
-    def disponibles(self, request):
-        """
-        Endpoint para listar solo laboratorios activos
-        """
-        laboratorios = self.queryset.filter(estado=True)
-        serializer = self.get_serializer(laboratorios, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['get'])
-    def horarios(self, request, pk=None):
-        """
-        Obtener horarios de un laboratorio específico
-        """
-        laboratorio = self.get_object()
-        horarios = laboratorio.horarios.all()
-        serializer = HorarioSerializer(horarios, many=True)
-        return Response(serializer.data)
-
-
-class HorarioViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para gestionar horarios
-    """
-    queryset = Horario.objects.select_related('docente', 'laboratorio').all()
-    serializer_class = HorarioSerializer
-    permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['dia_semana', 'docente', 'laboratorio']
-    search_fields = ['docente__nombres', 'laboratorio__nombre']
-    ordering_fields = ['dia_semana', 'hora_inicio']
-    ordering = ['dia_semana', 'hora_inicio']
-    
-    @action(detail=False, methods=['get'])
-    def por_dia(self, request):
-        """
-        Filtrar horarios por día de la semana
-        """
-        dia = request.query_params.get('dia', None)
-        if dia:
-            horarios = self.queryset.filter(dia_semana__iexact=dia)
-            serializer = self.get_serializer(horarios, many=True)
-            return Response(serializer.data)
-        return Response({'error': 'Parámetro "dia" requerido'}, status=status.HTTP_400_BAD_REQUEST)
-
-
-class RegistroAccesoViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para gestionar registros de acceso
-    """
-    queryset = RegistroAcceso.objects.select_related('docente', 'laboratorio').all()
-    permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['acceso_permitido', 'docente', 'laboratorio']
-    search_fields = ['docente__nombres', 'laboratorio__nombre', 'motivo']
-    ordering_fields = ['fecha_hora']
-    ordering = ['-fecha_hora']
-    
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return RegistroAccesoCreateSerializer
-        return RegistroAccesoSerializer
-    
-    @action(detail=False, methods=['get'])
-    def recientes(self, request):
-        """
-        Obtener los últimos 50 registros de acceso
-        """
-        registros = self.queryset[:50]
-        serializer = self.get_serializer(registros, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def por_fecha(self, request):
-        """
-        Filtrar registros por rango de fechas
-        """
-        fecha_inicio = request.query_params.get('fecha_inicio', None)
-        fecha_fin = request.query_params.get('fecha_fin', None)
+    try:
+        # Parsear datos del request
+        data = json.loads(request.body)
+        fingerprint_id = data.get('fingerprint_id')
+        dispositivo_codigo = data.get('dispositivo_codigo')
         
-        if fecha_inicio and fecha_fin:
-            registros = self.queryset.filter(
-                fecha_hora__date__gte=fecha_inicio,
-                fecha_hora__date__lte=fecha_fin
+        # Validar datos requeridos
+        if not fingerprint_id or not dispositivo_codigo:
+            return JsonResponse({
+                'acceso_permitido': False,
+                'motivo': 'Datos incompletos: se requiere fingerprint_id y dispositivo_codigo'
+            }, status=400)
+        
+        # Buscar dispositivo
+        try:
+            dispositivo = Dispositivo.objects.get(codigo=dispositivo_codigo, estado=True)
+        except Dispositivo.DoesNotExist:
+            return JsonResponse({
+                'acceso_permitido': False,
+                'motivo': f'Dispositivo {dispositivo_codigo} no encontrado o inactivo'
+            }, status=404)
+        
+        # Verificar que el dispositivo esté asociado a un laboratorio
+        try:
+            laboratorio = dispositivo.laboratorio
+            if not laboratorio.estado:
+                return JsonResponse({
+                    'acceso_permitido': False,
+                    'motivo': f'Laboratorio {laboratorio.nombre} está inactivo'
+                }, status=403)
+        except Laboratorio.DoesNotExist:
+            return JsonResponse({
+                'acceso_permitido': False,
+                'motivo': f'Dispositivo {dispositivo_codigo} no está asociado a ningún laboratorio'
+            }, status=404)
+        
+        # Buscar docente por huella
+        try:
+            docente = Docente.objects.get(fingerprint=fingerprint_id, activo=True)
+        except Docente.DoesNotExist:
+            # Registrar intento fallido
+            RegistroAcceso.objects.create(
+                docente=None,
+                laboratorio=laboratorio,
+                acceso_permitido=False,
+                motivo=f'Huella digital {fingerprint_id} no registrada o docente inactivo'
             )
-            serializer = self.get_serializer(registros, many=True)
-            return Response(serializer.data)
-        return Response(
-            {'error': 'Parámetros "fecha_inicio" y "fecha_fin" requeridos'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+            return JsonResponse({
+                'acceso_permitido': False,
+                'motivo': 'Huella digital no registrada o docente inactivo'
+            }, status=403)
+        
+        # Validar horario autorizado
+        ahora = timezone.now()
+        dia_actual = ahora.strftime('%A')  # Nombre del día en inglés
+        hora_actual = ahora.time()
+        
+        # Mapeo de días en inglés a español
+        dias_map = {
+            'Monday': 'Lunes',
+            'Tuesday': 'Martes',
+            'Wednesday': 'Miércoles',
+            'Thursday': 'Jueves',
+            'Friday': 'Viernes',
+            'Saturday': 'Sábado',
+            'Sunday': 'Domingo'
+        }
+        dia_espanol = dias_map.get(dia_actual, dia_actual)
+        
+        # Buscar horario autorizado
+        horario_valido = Horario.objects.filter(
+            docente=docente,
+            laboratorio=laboratorio,
+            dia_semana=dia_espanol,
+            hora_inicio__lte=hora_actual,
+            hora_fin__gte=hora_actual
+        ).first()
+        
+        if horario_valido:
+            # Acceso permitido
+            registro = RegistroAcceso.objects.create(
+                docente=docente,
+                laboratorio=laboratorio,
+                acceso_permitido=True,
+                motivo='Acceso autorizado'
+            )
+            
+            return JsonResponse({
+                'acceso_permitido': True,
+                'motivo': 'Acceso autorizado',
+                'docente': {
+                    'nombres': docente.nombres,
+                    'codigo': docente.codigo_docente,
+                    'correo': docente.correo
+                },
+                'laboratorio': {
+                    'nombre': laboratorio.nombre,
+                    'ubicacion': laboratorio.ubicacion
+                },
+                'horario': {
+                    'dia': dia_espanol,
+                    'hora_inicio': horario_valido.hora_inicio.strftime('%H:%M'),
+                    'hora_fin': horario_valido.hora_fin.strftime('%H:%M')
+                },
+                'registro_id': registro.id
+            })
+        else:
+            # Acceso denegado por horario
+            registro = RegistroAcceso.objects.create(
+                docente=docente,
+                laboratorio=laboratorio,
+                acceso_permitido=False,
+                motivo=f'Fuera de horario autorizado ({dia_espanol} {hora_actual.strftime("%H:%M")})'
+            )
+            
+            return JsonResponse({
+                'acceso_permitido': False,
+                'motivo': f'Acceso denegado: fuera de horario autorizado',
+                'docente': {
+                    'nombres': docente.nombres,
+                    'codigo': docente.codigo_docente
+                },
+                'laboratorio': {
+                    'nombre': laboratorio.nombre
+                },
+                'dia_hora': f'{dia_espanol} {hora_actual.strftime("%H:%M")}',
+                'registro_id': registro.id
+            }, status=403)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'acceso_permitido': False,
+            'motivo': 'Error en formato JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'acceso_permitido': False,
+            'motivo': f'Error interno: {str(e)}'
+        }, status=500)

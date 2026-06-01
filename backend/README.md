@@ -1,19 +1,30 @@
 # SmartLab Backend
 
-Backend del proyecto SmartLab desarrollado con Django y Django REST Framework. Sistema de control de acceso a laboratorios mediante registro de huellas dactilares y gestión de horarios.
+Backend del proyecto SmartLab desarrollado con Django. Sistema de control de acceso a laboratorios mediante registro de huellas dactilares y gestión de horarios.
 
-## Características
+## 🎯 Arquitectura
 
-- API RESTful completa con Django REST Framework
-- Base de datos PostgreSQL
-- Sistema de control de acceso por biometría
-- Gestión de horarios y laboratorios
-- Registro detallado de accesos
-- Panel de administración de Django
-- Dockerizado para fácil despliegue
-- Filtros, búsqueda y paginación en todos los endpoints
+Este proyecto utiliza **Django Admin con Jazzmin** como interfaz principal de gestión. No incluye una API REST completa, solo un endpoint específico para la validación de accesos biométricos.
 
-## Modelos de Base de Datos
+### Componentes:
+
+- **Panel de Administración (Django Admin + Jazzmin)**: Interfaz visual para gestionar docentes, laboratorios, dispositivos, horarios y ver registros de acceso
+- **API Biométrica**: Un único endpoint POST para validar accesos desde dispositivos lectores de huella
+- **Base de datos PostgreSQL**: Almacenamiento de datos
+- **Docker**: Contenedorización completa del sistema
+
+## 📋 Características
+
+- ✅ Panel administrativo mejorado con Jazzmin (interfaz moderna y amigable)
+- ✅ Gestión completa de docentes, laboratorios y dispositivos
+- ✅ Asignación de horarios por docente y laboratorio
+- ✅ Validación automática de accesos biométricos
+- ✅ Registro detallado de todos los intentos de acceso
+- ✅ Estadísticas en tiempo real (accesos del día, semana, etc.)
+- ✅ Búsqueda, filtros y ordenamiento avanzado
+- ✅ Dockerizado para fácil despliegue
+
+## 🗂️ Modelos de Base de Datos
 
 ### Docente
 Información de los docentes que tienen acceso a los laboratorios.
@@ -23,7 +34,7 @@ Información de los docentes que tienen acceso a los laboratorios.
 ### Dispositivo
 Dispositivos de control de acceso (lectores de huella digital).
 - **Campos**: código, IP, estado
-- **Relaciones**: Un laboratorio
+- **Relaciones**: Un laboratorio (OneToOne)
 
 ### Laboratorio
 Espacios físicos controlados con acceso biométrico.
@@ -38,14 +49,73 @@ Horarios autorizados de acceso para docentes a laboratorios específicos.
 ### RegistroAcceso
 Registro de todos los intentos de acceso (permitidos y denegados).
 - **Campos**: fecha_hora, acceso_permitido, motivo, docente, laboratorio
-- **Índices**: Optimizado para consultas por fecha y estado
+- **Nota**: Los registros son de solo lectura desde el admin
 
-## Requisitos
+## 🔌 Endpoint API
+
+### POST `/api/validar-acceso/`
+
+Endpoint para validar accesos desde dispositivos biométricos.
+
+**Request:**
+```json
+{
+    "fingerprint_id": 123,
+    "dispositivo_codigo": "DISP001"
+}
+```
+
+**Response exitosa (200):**
+```json
+{
+    "acceso_permitido": true,
+    "motivo": "Acceso autorizado",
+    "docente": {
+        "nombres": "Juan Pérez",
+        "codigo": "DOC001",
+        "correo": "juan@example.com"
+    },
+    "laboratorio": {
+        "nombre": "Laboratorio 1",
+        "ubicacion": "Piso 2"
+    },
+    "horario": {
+        "dia": "Lunes",
+        "hora_inicio": "08:00",
+        "hora_fin": "10:00"
+    },
+    "registro_id": 123
+}
+```
+
+**Response denegada (403):**
+```json
+{
+    "acceso_permitido": false,
+    "motivo": "Acceso denegado: fuera de horario autorizado",
+    "docente": {
+        "nombres": "Juan Pérez",
+        "codigo": "DOC001"
+    },
+    "laboratorio": {
+        "nombre": "Laboratorio 1"
+    },
+    "dia_hora": "Lunes 18:30",
+    "registro_id": 124
+}
+```
+
+### Otros Endpoints
+
+- `GET /api/` - Información de la API
+- `GET /api/health/` - Health check
+
+## 🚀 Instalación y Despliegue
+
+### Requisitos
 
 - Docker
 - Docker Compose
-
-## Instalación
 
 ### 1. Clonar el repositorio
 
@@ -123,11 +193,12 @@ backend/
 │   ├── urls.py          # URLs principales
 │   ├── wsgi.py          # WSGI config
 │   └── asgi.py          # ASGI config
-├── api/                 # App principal de la API
-│   ├── views.py         # Vistas de la API
+├── api/                 # App principal
+│   ├── views.py         # Vistas y endpoint biométrico
 │   ├── models.py        # Modelos de datos
+│   ├── admin.py         # Configuración del panel admin
 │   ├── urls.py          # URLs de la API
-│   └── ...
+│   └── migrations/      # Migraciones de base de datos
 ├── manage.py            # Script de gestión de Django
 ├── requirements.txt     # Dependencias de Python
 ├── Dockerfile           # Configuración de Docker
@@ -135,41 +206,61 @@ backend/
 └── .env                 # Variables de entorno (no versionado)
 ```
 
-## Endpoints
+## 🎨 Panel de Administración (Principal)
 
-### API Principal
-La API está disponible en `http://localhost:8000/api/`
+**URL:** `http://localhost:8000/admin/`
 
-#### Recursos disponibles:
-- `/api/docentes/` - Gestión de docentes
-- `/api/dispositivos/` - Gestión de dispositivos biométricos
-- `/api/laboratorios/` - Gestión de laboratorios
-- `/api/horarios/` - Gestión de horarios de acceso
-- `/api/registros-acceso/` - Registro de accesos
+El panel administrativo es la interfaz principal del sistema, mejorado con Jazzmin para una experiencia moderna y amigable.
 
-#### Endpoints especiales:
-- `/api/health/` - Health check de la API
-- `/api/docentes/activos/` - Lista solo docentes activos
-- `/api/docentes/{id}/horarios/` - Horarios de un docente
-- `/api/laboratorios/disponibles/` - Lista laboratorios activos
-- `/api/laboratorios/{id}/horarios/` - Horarios de un laboratorio
-- `/api/horarios/por_dia/?dia=Lunes` - Horarios filtrados por día
-- `/api/registros-acceso/recientes/` - Últimos 50 registros
-- `/api/registros-acceso/por_fecha/?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD` - Registros por rango de fechas
+### Funcionalidades:
+
+#### 📚 Gestión de Docentes
+- Crear, editar, buscar docentes
+- Activar/desactivar docentes masivamente
+- Ver estadísticas de accesos
+- Badges de estado visual
+- Búsqueda por nombre, correo, código
+
+#### 🔬 Gestión de Laboratorios
+- Administrar laboratorios y ubicaciones
+- Asignar dispositivos biométricos
+- Ver estadísticas de accesos del día y semana
+- Filtros por estado
+
+#### 🖥️ Gestión de Dispositivos
+- Registrar lectores de huella
+- Configurar IPs de dispositivos
+- Asignar a laboratorios
+- Control de estado activo/inactivo
+
+#### 📅 Gestión de Horarios
+- Asignar horarios por docente y laboratorio
+- Validación automática de rangos horarios
+- Filtros por día de la semana
+- Autocomplete para facilitar asignaciones
+
+#### 📊 Registros de Acceso
+- Visualización completa de accesos
+- Filtros por fecha, laboratorio, estado
+- Badges visuales de permitido/denegado
+- Solo lectura (se crean automáticamente)
+- Jerarquía por fecha para navegación
+
+## 🔌 API Biométrica
 
 ### Panel de Administración
 - **URL:** `http://localhost:8000/admin/`
-- **Descripción:** Panel de administración de Django con interfaz gráfica
+- **Descripción:** Panel de administración de Django mejorado con Jazzmin
 
-## Tecnologías
+## 💻 Tecnologías
 
 - **Django 5.0.4** - Framework web
-- **Django REST Framework** - Para crear APIs RESTful
+- **Django Jazzmin** - Panel administrativo moderno
 - **PostgreSQL 15** - Base de datos
 - **Docker** - Containerización
-- **JWT** - Autenticación
+- **Python 3.11+** - Lenguaje de programación
 
-## Desarrollo
+## 🛠️ Desarrollo
 
 ### Modo desarrollo
 
