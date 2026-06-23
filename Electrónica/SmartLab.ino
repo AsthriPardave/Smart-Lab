@@ -4,8 +4,8 @@
 #include <WiFi.h>
 
 // WIFI 
-const char* ssid = "Wingo";
-const char* pass = "virtualmiau1604";
+const char* ssid = "wifi-fisi";
+const char* pass = "";
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define RX2_PIN 16
