@@ -2,10 +2,13 @@
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_Fingerprint.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
 
 // WIFI 
-const char* ssid = "wifi-fisi";
-const char* pass = "";
+const char* ssid = "Wingo";
+const char* pass = "virtualmiau1604";
+const String SERVER_URL = "http://192.168.137.3:8000/api/"; 
+const String CODIGO_DISPOSITIVO = "DISP001";
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define RX2_PIN 16
@@ -13,6 +16,8 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 HardwareSerial mySerial(2);
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 const int BOTON_REGISTRO_PIN = 12;
+const int BOTON_BORRAR_PIN = 14;
+const int RELE_PIN = 25;
 
 // Variables de Control de Estado
 int intentosFallidos = 0;
@@ -21,10 +26,14 @@ bool estaBloqueado = false;
 unsigned long tiempoBloqueoInicio = 0;
 const unsigned long DURACION_BLOQUEO = 3 * 60 * 1000; // 3 minutos
 const unsigned long TIEMPO_ESPERA_REGISTRO = 20000;   // 20 segundos
+const unsigned long TIEMPO_ABIERTO = 4000;
 
 void setup() {
   Serial.begin(115200);
+  pinMode(RELE_PIN, OUTPUT);
+  digitalWrite(RELE_PIN, LOW);
   pinMode(BOTON_REGISTRO_PIN, INPUT_PULLUP);
+  pinMode(BOTON_BORRAR_PIN, INPUT_PULLUP);
 
   lcd.init();
   lcd.backlight();
@@ -129,6 +138,13 @@ void loop() {
     mostrarPantallaStandby();
   }
 
+  // DETECCIÓN DEL BOTÓN FÍSICO
+  if (digitalRead(BOTON_BORRAR_PIN) == LOW) {
+    delay(200); // Antirebote
+    borrarTodosLosRegistros();
+    mostrarPantallaStandby();
+  }
+
   // Lector de huellas en ciclo continuo  
   verificarHuellaBucle();
   delay(50); 
@@ -163,16 +179,45 @@ void verificarHuellaBucle() {
 
   p = finger.fingerFastSearch();
   if (p == FINGERPRINT_OK) {
-    intentosFallidos = 0; 
-    
+    intentosFallidos = 0;
+    lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("BIENVENIDO      ");
-    lcd.setCursor(0, 1);
-    String msjID = "ID: #" + String(finger.fingerID);
-    while(msjID.length() < 16) msjID += " "; // Rellena con espacios
-    lcd.print(msjID);
+    lcd.print("Validando en red");
     
-    delay(3000); 
+    // --- PETICIÓN AL BACKEND ---
+    if(WiFi.status() == WL_CONNECTED){
+      HTTPClient http;
+      http.begin(SERVER_URL + "validar-acceso/");
+      http.addHeader("Content-Type", "application/json");
+
+      // Crear el JSON a enviar
+      String httpRequestData = "{\"fingerprint_id\":" + String(finger.fingerID) + ",\"dispositivo_codigo\":\"" + CODIGO_DISPOSITIVO + "\"}";
+      
+      int httpResponseCode = http.POST(httpRequestData);
+      Serial.println(httpResponseCode);
+      if (httpResponseCode == 200) {
+        // Acceso permitido por el backend
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("ACCESO PERMITIDO");
+        abrirCerradura();
+
+      } else {
+        // Acceso denegado (fuera de horario, inactivo, etc) o error
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("ACCESO DENEGADO ");
+        lcd.setCursor(0, 1);
+        lcd.print("Revise horario  ");
+        delay(3000);
+      }
+      http.end();
+    } else {
+       // Opcional: ¿Qué hacer si no hay WiFi? ¿Abrir igual o bloquear?
+       lcd.print("Sin conexion WiFi");
+       delay(2000);
+    }
+    
     mostrarPantallaStandby();
   } else if (p == FINGERPRINT_NOTFOUND) {
     intentosFallidos++;
@@ -232,10 +277,12 @@ void registrarNuevaHuella() {
       mostrarTiempoAgotado();
       return;
     }
-    delay(50); // PAUSA VITAL PARA EVITAR CONSUMO EXCESIVO Y PARPADEO
+    delay(50); // PAUSA VITAL
   }
-
-  p = finger.image2Tz(1);
+  
+  // ¡AQUÍ ESTABA EL ERROR! Debe ser el slot 1
+  p = finger.image2Tz(1); 
+  
   if (p != FINGERPRINT_OK) {
     lcd.setCursor(0, 0);
     lcd.print("Error de imagen ");
@@ -274,7 +321,9 @@ void registrarNuevaHuella() {
     delay(50); // PAUSA VITAL
   }
 
-  p = finger.image2Tz(2);
+  // Esta segunda lectura sí va al slot 2
+  p = finger.image2Tz(2); 
+  
   if (p != FINGERPRINT_OK) {
     lcd.setCursor(0, 0);
     lcd.print("Error confirmand");
@@ -282,12 +331,28 @@ void registrarNuevaHuella() {
     lcd.print("                ");
     delay(2000);
     return;
-  }
+  }   
 
   p = finger.createModel();
   if (p == FINGERPRINT_OK) {
     p = finger.storeModel(id);
     if (p == FINGERPRINT_OK) {
+      lcd.setCursor(0, 0);
+      lcd.print("Huella Guardada ");
+      lcd.setCursor(0, 1);
+      lcd.print("Enviando a BD...");
+
+      // --- PETICIÓN AL BACKEND ---
+      if(WiFi.status() == WL_CONNECTED){
+        HTTPClient http;
+        http.begin(SERVER_URL + "registrar-docente-demo/"); 
+        http.addHeader("Content-Type", "application/json");
+        
+        String httpRequestData = "{\"fingerprint_id\":" + String(id) + "}";
+        int httpResponseCode = http.POST(httpRequestData);
+        http.end();
+      }
+
       lcd.setCursor(0, 0);
       lcd.print("Registro Exitoso");
       lcd.setCursor(0, 1);
@@ -296,17 +361,39 @@ void registrarNuevaHuella() {
       lcd.print(msjIdNuevo);
       delay(3000);
     } else {
+      // Manejo de error si falla al guardar en el sensor
       lcd.setCursor(0, 0);
       lcd.print("Error al guardar");
-      lcd.setCursor(0, 1);
-      lcd.print("                ");
       delay(2000);
     }
   } else {
-    lcd.setCursor(0, 0);
-    lcd.print("Huellas no      ");
-    lcd.setCursor(0, 1);
-    lcd.print("coinciden       ");
-    delay(2000);
+      // Manejo de error si las huellas no coinciden (slot 1 vs slot 2)
+      lcd.setCursor(0, 0);
+      lcd.print("Huellas no      ");
+      lcd.setCursor(0, 1);
+      lcd.print("coinciden       ");
+      delay(2000);
   }
+}
+
+void abrirCerradura() {
+  digitalWrite(RELE_PIN, HIGH); 
+  delay(TIEMPO_ABIERTO); 
+  digitalWrite(RELE_PIN, LOW);   
+  Serial.println("Cerradura asegurada nuevamente.");
+  intentosFallidos = 0;
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Cerrando puerta");
+  delay(1000);
+}
+
+void borrarTodosLosRegistros(){  
+    finger.emptyDatabase();
+    lcd.setCursor(0, 0);
+    lcd.print("Datos Eliminados              ");
+    lcd.setCursor(0, 1);
+    lcd.print("Exitosamente        ");
+    Serial.println(finger.templateCount);
+    delay(5000);
 }

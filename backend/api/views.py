@@ -159,7 +159,7 @@ def validar_acceso(request):
                     'hora_fin': horario_valido.hora_fin.strftime('%H:%M')
                 },
                 'registro_id': registro.id
-            })
+            }, status=200)
         else:
             # Acceso denegado por horario
             registro = RegistroAcceso.objects.create(
@@ -193,3 +193,47 @@ def validar_acceso(request):
             'acceso_permitido': False,
             'motivo': f'Error interno: {str(e)}'
         }, status=500)
+
+
+# Miau miau miau miau miau miau
+@csrf_exempt
+@require_http_methods(["POST"])
+def registrar_docente_demo(request):
+    try:
+        data = json.loads(request.body)
+        fingerprint_id = data.get('fingerprint_id')
+
+        if not fingerprint_id:
+            return JsonResponse({'status': 'error', 'message': 'fingerprint_id requerido'}, status=400)
+
+        # Usamos update_or_create para que si el ID de huella vuelve a registrarse, 
+        # no rompa la base de datos por duplicados únicos, sino que lo actualice.
+        docente, created = Docente.objects.update_or_create(
+            fingerprint=fingerprint_id,
+            defaults={
+                'nombres': f'Docente Demo {fingerprint_id}',
+                'correo': f'docente_{fingerprint_id}_{int(timezone.now().timestamp())}@demo.com', # Correo único con timestamp
+                'codigo_docente': f'DM{fingerprint_id:03d}', # Formato DM001, DM002
+                'activo': True
+            }
+        )
+
+        # Asegurar horario 24/7 para la demo
+        laboratorio = Laboratorio.objects.filter(estado=True).first()
+        if laboratorio:
+            dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+            for dia in dias:
+                Horario.objects.get_or_create(
+                    docente=docente,
+                    laboratorio=laboratorio,
+                    dia_semana=dia,
+                    defaults={
+                        'hora_inicio': '00:00',
+                        'hora_fin': '23:59'
+                    }
+                )
+
+        return JsonResponse({'status': 'ok', 'message': f'Docente {fingerprint_id} procesado correctamente.'})
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

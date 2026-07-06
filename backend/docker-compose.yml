@@ -16,7 +16,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
     environment:
       - DEBUG=1
       - DATABASE_URL=postgresql://smartlab_user:smartlab_password@db:5432/smartlab_db
