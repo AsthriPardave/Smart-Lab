@@ -108,7 +108,7 @@ def validar_acceso(request):
         
         # Validar horario autorizado
         #ahora = timezone.now()
-        ahora = timezone.timezone()
+        ahora = timezone.localtime(timezone.now()) 
         dia_actual = ahora.strftime('%A')  # Nombre del día en inglés
         hora_actual = ahora.time()
         
