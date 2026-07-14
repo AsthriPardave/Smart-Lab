@@ -4,7 +4,7 @@ from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from datetime import datetime
 import json
-
+from django.conf import settings
 from .models import Docente, Dispositivo, Laboratorio, Horario, RegistroAcceso
 
 
@@ -54,6 +54,10 @@ def validar_acceso(request):
         "laboratorio": {...}
     }
     """
+    api_key = request.headers.get("X-API-KEY")
+
+    if api_key != settings.DEVICE_API_KEY:
+        raise Exception("API Key inválida.")
     try:
         # Parsear datos del request
         data = json.loads(request.body)
@@ -200,6 +204,10 @@ def validar_acceso(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def registrar_docente_demo(request):
+    api_key = request.headers.get("X-API-KEY")
+
+    if api_key != settings.DEVICE_API_KEY:
+        raise Exception("API Key inválida.")
     try:
         data = json.loads(request.body)
         fingerprint_id = data.get('fingerprint_id')
