@@ -5,9 +5,14 @@
 #include <HTTPClient.h>
 
 // WIFI 
-const char* ssid = "Wingo";
-const char* pass = "virtualmiau1604";
-const String SERVER_URL = "http://192.168.137.3:8000/api/"; 
+// const char* ssid = "wifi-fisi";
+// const char* pass = "Fisi@390";
+//const char* ssid = "Wingo";
+//const char* pass = "virtualmiau1604";
+const char* ssid = "Informática";
+const char* pass = "SOPtec309";
+//const String SERVER_URL = "http://192.168.137.1:8000/api/"; 
+const String SERVER_URL = "http://192.168.30.18:8000/api/"; 
 const String CODIGO_DISPOSITIVO = "DISP001";
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -51,7 +56,6 @@ void setup() {
   lcd.setCursor(0, 1);
   
   Serial.print("Conectando a WIFI");
-  
   int intentos_wifi = 0;
   while (WiFi.status() != WL_CONNECTED && intentos_wifi < 30) { 
     delay(500);
@@ -83,6 +87,40 @@ void setup() {
     Serial.println("Error: Tiempo de espera agotado. Iniciando sin red.");
     delay(3000);
   }
+
+
+  Serial.println("****************************************************");
+  Serial.println("****************************************************");
+  verificarConexionDjango();
+  Serial.println("****************************************************");
+  Serial.println("****************************************************");
+
+
+// Después de esto, sigues con tu código normal
+  Serial.println("-----------------------------------------------------------------");
+  Serial.println("-----------------------------------------------------------------");
+  HTTPClient http;
+  // Asegúrate de que SERVER_URL termine en / o "health/" empiece correctamente
+  http.begin(SERVER_URL + "health/"); 
+  // En un GET no es estrictamente necesario el Content-Type si no envías datos, 
+  // pero puedes dejarlo o cambiarlo por "Accept: application/json"
+  http.addHeader("Accept", "application/json");  
+  // ¡El cambio importante está aquí! Sin argumentos.
+  int httpResponseCode = http.GET(); 
+  Serial.print("Respuesta del Http health: ");
+  Serial.println(httpResponseCode);
+  if (httpResponseCode > 0) {
+      String payload = http.getString();
+      Serial.println("Cuerpo de la respuesta:");
+      Serial.println(payload);
+  } else {
+      Serial.print("Error en la peticion HTTP: ");
+      Serial.println(http.errorToString(httpResponseCode).c_str());
+  }
+  http.end();
+  Serial.println("-----------------------------------------------------------------");
+  Serial.println("-----------------------------------------------------------------");
+
 
   // Lector de huella
   mySerial.begin(57600, SERIAL_8N1, RX2_PIN, TX2_PIN);
@@ -194,6 +232,7 @@ void verificarHuellaBucle() {
       String httpRequestData = "{\"fingerprint_id\":" + String(finger.fingerID) + ",\"dispositivo_codigo\":\"" + CODIGO_DISPOSITIVO + "\"}";
       
       int httpResponseCode = http.POST(httpRequestData);
+      Serial.print("Respuesta de la verificacion: ");
       Serial.println(httpResponseCode);
       if (httpResponseCode == 200) {
         // Acceso permitido por el backend
@@ -213,7 +252,6 @@ void verificarHuellaBucle() {
       }
       http.end();
     } else {
-       // Opcional: ¿Qué hacer si no hay WiFi? ¿Abrir igual o bloquear?
        lcd.print("Sin conexion WiFi");
        delay(2000);
     }
@@ -397,3 +435,26 @@ void borrarTodosLosRegistros(){
     Serial.println(finger.templateCount);
     delay(5000);
 }
+
+void verificarConexionDjango() {
+  WiFiClient client;
+  const char* server_ip = "192.168.30.18";
+  uint16_t port = 8000;
+
+  Serial.print("Intentando conectar a ");
+  Serial.print(server_ip);
+  Serial.print(":");
+  Serial.println(port);
+
+  // Intenta conectar con un timeout de 3000 milisegundos (3 segundos)
+  if (client.connect(server_ip, port, 3000)) {
+    Serial.println("¡ÉXITO! El dispositivo se pudo conectar a Django.");
+    client.stop(); // Cerramos la conexión de prueba
+  } else {
+    Serial.println("ERROR: No se pudo conectar. Posibles causas:");
+    Serial.println("1. Django no está corriendo.");
+    Serial.println("2. No ejecutaste Django con 'runserver 0.0.0.0:8000'.");
+    Serial.println("3. El firewall de tu PC está bloqueando el puerto 8000.");
+  }
+}
+
